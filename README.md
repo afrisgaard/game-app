@@ -9,15 +9,21 @@ npm install
 npm run dev
 ```
 
+## Workflow
+
+1. Create a branch, e.g. `feat/target-score`, `fix/negative-totals` or `chore/update-deps`.
+2. Open a pull request into `main`. CI builds the app, and Release Drafter labels the PR from its branch name or title.
+3. Merge the PR. Release Drafter adds it to the draft release and picks the next version from the labels:
+   - `major` / `breaking` → next major
+   - `feature` / `enhancement` / `minor` → next minor
+   - anything else → next patch
+
 ## Release and deploy
 
-Every published GitHub release builds the app and deploys it to GitHub Pages.
+1. On GitHub, open **Releases**. The draft is already written.
+2. Tap **Edit** on the draft, check the notes, and tap **Publish release**.
+3. The **Deploy to GitHub Pages** workflow builds and deploys the site in about a minute. The version shows in the app's footer.
 
-1. Commit and push your changes to `main`.
-2. On GitHub, open **Releases → Draft a new release**.
-3. Create a new tag such as `v1.1.0`, add notes, and tap **Publish release**.
-4. The **Deploy to GitHub Pages** workflow runs, and the site updates in about a minute. The version shows in the app's footer.
-
-You can also run the workflow by hand from the **Actions** tab.
+You can also run the deploy by hand from the **Actions** tab.
 
 One-time setup: **Settings → Pages → Source** must be set to **GitHub Actions**.
