@@ -6,7 +6,24 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 function load() {
   try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
 }
-const fresh = { players: [], rounds: [], lowWins: false, target: "" };
+const fresh = { players: [], rounds: [], lowWins: false, target: "", startedAt: null, history: [] };
+
+// Saves the current game (if it has any rounds) at the top of the history.
+function archive(s) {
+  const history = s.history || [];
+  if (!s.rounds.length || !s.players.length) return history;
+  const players = s.players.map(p => ({
+    id: p.id, name: p.name,
+    total: s.rounds.reduce((a, r) => a + (Number(r.scores[p.id]) || 0), 0),
+  }));
+  players.sort((a, b) => s.lowWins ? a.total - b.total : b.total - a.total);
+  const best = players[0].total;
+  const game = {
+    id: uid(), startedAt: s.startedAt || null, endedAt: Date.now(), lowWins: s.lowWins,
+    players, rounds: s.rounds, winners: players.filter(p => p.total === best).map(p => p.name),
+  };
+  return [game, ...history].slice(0, 200);
+}
 
 export default function App() {
   const [st, setSt] = useState(() => ({ ...fresh, ...(load() || {}) }));
@@ -57,7 +74,7 @@ export default function App() {
     });
     setSt(s => editing
       ? { ...s, rounds: s.rounds.map(r => r.id === editing ? { ...r, scores } : r) }
-      : { ...s, rounds: [...s.rounds, { id: uid(), scores }] });
+      : { ...s, startedAt: s.rounds.length ? s.startedAt : Date.now(), rounds: [...s.rounds, { id: uid(), scores }] });
     resetEntry();
   };
 
@@ -74,11 +91,11 @@ export default function App() {
   };
   const newGame = () => {
     if (confirm !== "new") { setConfirm("new"); return; }
-    setSt(s => ({ ...s, rounds: [] })); resetEntry(); setConfirm(null);
+    setSt(s => ({ ...s, history: archive(s), rounds: [], startedAt: null })); resetEntry(); setConfirm(null);
   };
   const clearAll = () => {
     if (confirm !== "clear") { setConfirm("clear"); return; }
-    setSt({ ...fresh, lowWins: st.lowWins }); resetEntry(); setConfirm(null);
+    setSt(s => ({ ...fresh, lowWins: s.lowWins, target: s.target, history: archive(s) })); resetEntry(); setConfirm(null);
   };
 
   const editingIndex = st.rounds.findIndex(r => r.id === editing);
@@ -195,13 +212,91 @@ export default function App() {
             onChange={e => setSt(s => ({ ...s, target: e.target.value.replace(/[^0-9]/g, "") }))} />
         </div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
-          <button className="btn ghost" onClick={newGame} disabled={!st.rounds.length}>{confirm === "new" ? "Tap again to confirm" : "New game, same players"}</button>
-          <button className="btn danger" onClick={clearAll}>{confirm === "clear" ? "Tap again to confirm" : "Clear everything"}</button>
+          <button className="btn ghost" onClick={newGame} disabled={!st.rounds.length}>{confirm === "new" ? "Tap again to confirm" : "Save game, start new"}</button>
+          <button className="btn danger" onClick={clearAll}>{confirm === "clear" ? "Tap again to confirm" : "Save game, new players"}</button>
         </div>
       </section>
+      <History history={st.history || []}
+        onDelete={id => setSt(s => ({ ...s, history: s.history.filter(g => g.id !== id) }))}
+        onClear={() => setSt(s => ({ ...s, history: [] }))} />
+
       <footer className="foot">Scorepad {__APP_VERSION__}</footer>
     </div>
   );
 }
 
 function ordinal(n) { const s = ["th","st","nd","rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+
+function fmtDate(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + ", " +
+    d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function History({ history, onDelete, onClear }) {
+  const [open, setOpen] = useState(null);
+  const [conf, setConf] = useState(null);
+  useEffect(() => { if (!conf) return; const t = setTimeout(() => setConf(null), 3000); return () => clearTimeout(t); }, [conf]);
+
+  const del = (id) => { if (conf !== id) { setConf(id); return; } onDelete(id); setConf(null); setOpen(null); };
+  const clear = () => { if (conf !== "all") { setConf("all"); return; } onClear(); setConf(null); setOpen(null); };
+
+  return (
+    <section className="sheet">
+      <h2>Past games</h2>
+      {history.length === 0 ? (
+        <p className="empty">Games are saved here when you start a new one.</p>
+      ) : (
+        <>
+          <p className="hint">{history.length === 1 ? "1 game" : `${history.length} games`}. Tap a game to see its rounds.</p>
+          <ul className="games">
+            {history.map(g => {
+              const isOpen = open === g.id;
+              return (
+                <li key={g.id} className={"game" + (isOpen ? " open" : "")}>
+                  <button className="game-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : g.id)}>
+                    <span className="game-title">
+                      🏆 {g.winners.join(" & ")} {g.winners.length > 1 ? "tied" : "won"} with {g.players[0].total}
+                    </span>
+                    <span className="game-when">
+                      {fmtDate(g.endedAt)}, {g.rounds.length === 1 ? "1 round" : `${g.rounds.length} rounds`}
+                      {g.lowWins ? ", lowest wins" : ""}
+                    </span>
+                    <span className="game-scores">
+                      {g.players.map(p => <span key={p.id}>{p.name} <b>{p.total}</b></span>)}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="game-body">
+                      <div className="tablebox">
+                        <table>
+                          <thead><tr><th scope="col">Round</th>{g.players.map(p => <th key={p.id} scope="col">{p.name}</th>)}</tr></thead>
+                          <tbody className="static">
+                            {g.rounds.map((r, i) => (
+                              <tr key={r.id}>
+                                <td>{i + 1}</td>
+                                {g.players.map(p => { const v = r.scores[p.id] || 0; return <td key={p.id} className={v < 0 ? "neg" : ""}>{v}</td>; })}
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot><tr><td>Total</td>{g.players.map(p => <td key={p.id}>{p.total}</td>)}</tr></tfoot>
+                        </table>
+                      </div>
+                      <div className="entry-actions">
+                        <button className="btn danger" onClick={() => del(g.id)}>{conf === g.id ? "Tap again to delete" : "Delete game"}</button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="entry-actions">
+            <button className="btn ghost" onClick={clear}>{conf === "all" ? "Tap again to clear history" : "Clear history"}</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
