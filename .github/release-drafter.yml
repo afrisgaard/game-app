@@ -1,0 +1,45 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: '🚀 Features'
+    labels: ['feature', 'enhancement']
+  - title: '🐛 Fixes'
+    labels: ['fix', 'bug']
+  - title: '🧰 Maintenance'
+    labels: ['chore', 'dependencies', 'ci', 'docs']
+
+change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  major:
+    labels: ['major', 'breaking']
+  minor:
+    labels: ['minor', 'feature', 'enhancement']
+  patch:
+    labels: ['patch', 'fix', 'bug', 'chore', 'dependencies', 'ci', 'docs']
+  default: patch
+
+# Labels PRs automatically from branch names and titles
+autolabeler:
+  - label: 'feature'
+    branch: ['/^feat(ure)?\/.+/']
+    title: ['/^feat/i']
+  - label: 'fix'
+    branch: ['/^fix\/.+/']
+    title: ['/^fix/i']
+  - label: 'chore'
+    branch: ['/^chore\/.+/']
+    title: ['/^chore/i']
+  - label: 'docs'
+    files: ['*.md']
+  - label: 'ci'
+    files: ['.github/**']
+
+template: |
+  ## What's changed
+
+  $CHANGES
+
+  **Full changelog:** https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
